@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 
 import type { ToolAnnotations } from './Mcp.js'
-import type { ToolCatalog } from './ToolCatalog.js'
+import type { ToolCatalog, ToolDefinition } from './ToolCatalog.js'
 
 export type ExecutionStatus =
   | 'running'
@@ -250,20 +250,20 @@ export class CatalogConnector implements Connector {
   readonly catalog: ToolCatalog
   readonly name: string
   readonly instructions?: string | undefined
-  readonly resolvePolicy: (annotations: ToolAnnotations | undefined) => ToolPolicy
+  readonly resolvePolicy: (tool: ToolDefinition) => ToolPolicy
 
   constructor(
     catalog: ToolCatalog,
     options: {
       name?: string
       instructions?: string
-      resolvePolicy?: (annotations: ToolAnnotations | undefined) => ToolPolicy
+      resolvePolicy?: (tool: ToolDefinition) => ToolPolicy
     } = {},
   ) {
     this.catalog = catalog
     this.name = options.name ?? sanitizeIdentifier(catalog.name)
     this.instructions = options.instructions ?? catalog.instructions
-    this.resolvePolicy = options.resolvePolicy ?? defaultToolPolicy
+    this.resolvePolicy = options.resolvePolicy ?? ((tool) => defaultToolPolicy(tool.annotations))
     assertIdentifier(this.name)
   }
 
@@ -278,7 +278,7 @@ export class CatalogConnector implements Connector {
         ...(tool.outputSchema ? { outputSchema: tool.outputSchema } : undefined),
         ...(tool.instructions ? { instructions: tool.instructions } : undefined),
         ...(tool.annotations ? { annotations: tool.annotations } : undefined),
-        policy: this.resolvePolicy(tool.annotations),
+        policy: this.resolvePolicy(tool),
       })),
     }
   }
