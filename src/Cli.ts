@@ -40,6 +40,7 @@ import * as Schema from './Schema.js'
 import * as Skill from './Skill.js'
 import * as SyncMcp from './SyncMcp.js'
 import * as SyncSkills from './SyncSkills.js'
+import * as ToolCatalog from './ToolCatalog.js'
 
 const destructiveCommandHint = 'Confirm with the user before executing this destructive command.'
 
@@ -124,6 +125,8 @@ export type Cli<
   fetch(req: Request): Promise<Response>
   /** Parses argv, runs the matched command, and writes the output envelope to stdout. */
   serve(argv?: string[], options?: serve.Options): Promise<void>
+  /** Builds a transport-neutral catalog over the commands exposed to agents. */
+  toolCatalog(options?: ToolCatalog.Options): Promise<ToolCatalog.ToolCatalog>
   /** Registers middleware that runs around every command. */
   use(handler: MiddlewareHandler<vars, env, globals>): Cli<commands, vars, env, globals>
   /** The vars schema, if declared. Use `typeof cli.vars` with `middleware<vars, env>()` for typed middleware. */
@@ -408,6 +411,19 @@ export function create(
         update: def.update,
         vars: def.vars,
         version,
+      })
+    },
+
+    async toolCatalog(options: ToolCatalog.Options = {}) {
+      if (pending.length > 0) await Promise.all(pending)
+      const tools = Mcp.collectTools(commands, [], [], options.tools)
+      return new ToolCatalog.ToolCatalog(tools, {
+        env: def.env,
+        instructions: def.mcp?.instructions,
+        middlewares,
+        name: def.mcp?.name ?? name,
+        vars: def.vars,
+        version: version ?? '0.0.0',
       })
     },
 
