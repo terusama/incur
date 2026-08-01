@@ -8,6 +8,7 @@
     "incur": "node --import tsx src/bin.ts",
     "cli:skills": "pnpm incur skills add",
     "dev": "zile dev",
+    "prepare": "zile",
     "test": "vitest"
   },
   "devDependencies": {
