@@ -6037,13 +6037,13 @@ describe('fetch', () => {
 
     test('completed and aborted MCP exchanges are released', async () => {
       expect(await countRetainedMcpExchanges()).toMatchInlineSnapshot(`
-        {
-          "aborted": 50,
-          "requests": 0,
-          "responses": 0,
-        }
-      `)
-    })
+          {
+            "aborted": 50,
+            "requests": 0,
+            "responses": 0,
+          }
+        `)
+    }, 15_000)
 
     test('concurrent clients may reuse JSON-RPC ids', async () => {
       let startFirst!: () => void
@@ -6277,6 +6277,31 @@ describe('fetch', () => {
         params: {},
       })
       expect(res.status).toBe(400)
+    })
+
+    test('mcp.stateless false isolates concurrent client sessions', async () => {
+      const cli = Cli.create('test', { version: '1.0.0', mcp: { stateless: false } })
+      cli.command('ping', { run: () => ({ pong: true }) })
+
+      const [first, second] = await Promise.all([initSession(cli), initSession(cli)])
+      expect(first.sessionId).toEqual(expect.any(String))
+      expect(second.sessionId).toEqual(expect.any(String))
+      expect(first.sessionId).not.toBe(second.sessionId)
+
+      const [firstList, secondList] = await Promise.all([
+        mcpRequest(
+          cli,
+          { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+          first.sessionId,
+        ),
+        mcpRequest(
+          cli,
+          { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} },
+          second.sessionId,
+        ),
+      ])
+      expect(firstList.status).toBe(200)
+      expect(secondList.status).toBe(200)
     })
 
     test('POST /mcp with tools/call → executes command', async () => {

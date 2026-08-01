@@ -1961,7 +1961,7 @@ function createMcpHttpHandler(
   version: string,
   options: createMcpHttpHandler.Options = {},
 ) {
-  let session: ReturnType<typeof createServer> | undefined
+  const sessions = new Map<string, Awaited<ReturnType<typeof createServer>>>()
 
   async function createServer(
     commands: Map<string, CommandEntry>,
@@ -2019,11 +2019,32 @@ function createMcpHttpHandler(
       return new Response(null, { status: 405, headers: { Allow: 'POST' } })
 
     if (!stateless) {
-      session ??= createServer(commands, mcpOptions, false).catch((error) => {
-        session = undefined
-        throw error
-      })
-      return (await session).transport.handleRequest(req)
+      const sessionId = req.headers.get('mcp-session-id')
+      if (sessionId) {
+        const session = sessions.get(sessionId)
+        if (session) return session.transport.handleRequest(req)
+        return new Response(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            error: { code: -32001, message: 'Session not found' },
+            id: null,
+          }),
+          { status: 404, headers: { 'content-type': 'application/json' } },
+        )
+      }
+
+      // Every session-less initialize request receives an independent server
+      // and transport. Once the transport assigns an ID, subsequent requests
+      // route through that exact pair.
+      const created = await createServer(commands, mcpOptions, false)
+      created.transport.onclose = () => {
+        const id = created.transport.sessionId
+        if (id) sessions.delete(id)
+      }
+      const response = await created.transport.handleRequest(req)
+      const createdSessionId = created.transport.sessionId
+      if (createdSessionId) sessions.set(createdSessionId, created)
+      return response
     }
 
     const abortReason = () =>
